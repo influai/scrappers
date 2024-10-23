@@ -11,7 +11,22 @@ from telethon.tl.types import (
     ReactionCustomEmoji,
     ReactionEmoji,
     ReactionPaid,
+    MessageFwdHeader
 )
+
+
+def scrape_forward_from_info(fwd_from: MessageFwdHeader) -> dict:
+    """
+    scrape info about channel from which msg was forwarded and save this info
+    
+    https://tl.telethon.dev/constructors/message_fwd_header.html
+    """
+    info = {
+        "channel_id": fwd_from.from_id.channel_id,
+        "name": fwd_from.from_name,
+        "channel_post": fwd_from.channel_post,
+    }
+    return info
 
 
 def scrape_media(msg: Message) -> tuple[str, bool, bool, bool, bool]:
@@ -63,23 +78,43 @@ def scrape_metadata(
     media_flags: tuple,
     paid_reactions: int,
 ) -> None:
-    """scrape some meta from msg and save it along with media_flags and paid reactions"""
+    """
+    scrape some meta from msg and save it along with media_flags and paid reactions
+    
+    https://docs.telethon.dev/en/stable/modules/custom.html#telethon.tl.custom.message.Message
+    """
     msg_metadata = {
         "id": msg.id,
         "url": f"{channel_url}/{msg.id}",
+
         "date": str(msg.date),
+
         "views": msg.views,
         "paid_reactions": paid_reactions,
         "forwards": msg.forwards,
+
+        "silent": msg.silent,
+        "post": msg.post,
+        "noforwards": msg.noforwards,
+        "pinned": msg.pinned,
+        
+        "via_bot_id": msg.via_bot_id,
+        "via_business_bot_id": msg.via_business_bot_id,
+
+        "fwd_from_flag": True if msg.fwd_from is not None else False,
+        "fwd_from_info": None,  # if fwd_from_flag is True, this will contain the fwd from ch info
+
         "media": media_flags[0],
         "photo": media_flags[1],
         "video": media_flags[2],
         "voice": media_flags[3],
         "poll": media_flags[4],
-        "pinned": msg.pinned,
-        "via_bot_id": msg.via_bot_id,
-        "via_business_bot_id": msg.via_business_bot_id,
     }
+
+    # scrape info about "fwd_from" channel if so
+    if msg.fwd_from:
+        msg_metadata["fwd_from_info"] = scrape_forward_from_info(msg.fwd_from)
+
     # save metadata
     with open(msg_dir / "meta.json", "w") as f:
         json.dump(msg_metadata, f, indent=4, ensure_ascii=False)
@@ -88,7 +123,7 @@ def scrape_metadata(
 def scrape_text(msg: Message, msg_dir: Path) -> None:
     """scrape text from message content and save (in future mb some preprocessing)"""
     if msg.message:
-        with open(msg_dir / "message.txt", "a+") as f:
+        with open(msg_dir / "message.txt", "w") as f:
             f.write(msg.message)
 
 

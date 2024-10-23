@@ -15,7 +15,7 @@ logging.basicConfig(
 logging.info("channel scrapper started")
 
 # load configs
-tg_client, channel_url, from_date, to_date = utils.load_configs(Path("config.yml"))
+tg_client, channel_url, from_date, to_date = utils.load_configs(Path("configs", "config.yml"))
 
 # load (or create and load) csv with runs info
 runs_info_path = Path("data", "runs_info.csv")

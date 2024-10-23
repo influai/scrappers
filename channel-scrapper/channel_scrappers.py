@@ -67,7 +67,7 @@ async def scrape_channel(
     logging.info(f"starting the posts processing from {from_date} to {to_date}")
     # wait_time is needed because we dont want to get banned :)
     async for msg in client.iter_messages(
-        channel_url, reverse=True, offset_date=from_date, limit=None, wait_time=10
+        channel_url, reverse=True, offset_date=from_date, limit=None, wait_time=5
     ):
         try:
             if msg.date <= to_date:

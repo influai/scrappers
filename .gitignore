@@ -1,1 +1,4 @@
 */__pycache__
+/data/*
+channel_scrapper.log
+*.session

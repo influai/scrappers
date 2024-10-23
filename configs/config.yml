@@ -9,6 +9,6 @@ tg_client:
   app_version: 5.6.3 Snap
 
 parsing:
-  channel_url: https://t.me/aitalenthubnews  # channel url here
-  from_date: 01-01-2024  # DD-MM-YYYY
-  to_date: 01-02-2024  # DD-MM-YYYY   !!!don't set to the future dates pls
+  channel_url: https://t.me/lilbebik  # channel url here
+  from_date: 21-10-2024  # DD-MM-YYYY
+  to_date: 24-10-2024  # DD-MM-YYYY   !!!don't set to the future dates pls
