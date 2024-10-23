@@ -58,8 +58,8 @@ def last_old_dates(
     if channel_data.empty:
         return None, None
     
-    channel_data['from_date'] = pd.to_datetime(channel_data['from_date']).dt.tz_convert(timezone.utc)
-    channel_data['to_date'] = pd.to_datetime(channel_data['to_date']).dt.tz_convert(timezone.utc)
+    channel_data.loc[:, 'from_date'] = pd.to_datetime(channel_data['from_date']).dt.tz_convert(timezone.utc)
+    channel_data.loc[:, 'to_date'] = pd.to_datetime(channel_data['to_date']).dt.tz_convert(timezone.utc)
 
     oldest_from_date = channel_data["from_date"].min()
     latest_to_date = channel_data["to_date"].max()

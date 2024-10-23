@@ -5,8 +5,6 @@ from pathlib import Path
 from telethon.tl.custom.message import Message
 from telethon.tl.types import (
     MessageEntityTextUrl,
-    MessageMediaDocument,
-    MessageMediaPhoto,
     MessageMediaPoll,
     ReactionCustomEmoji,
     ReactionEmoji,
@@ -27,24 +25,6 @@ def scrape_forward_from_info(fwd_from: MessageFwdHeader) -> dict:
         "channel_post": fwd_from.channel_post,
     }
     return info
-
-
-def scrape_media(msg: Message) -> tuple[str, bool, bool, bool, bool]:
-    """scrape the media flags - in future change"""
-    media_flag = "True" if msg.media else "False"  # just for now
-    img_flag, vid_flag, voice_flag, poll_flag = False, False, False, False
-    if media_flag:
-        if isinstance(msg.media, MessageMediaPhoto):
-            img_flag = True
-        elif isinstance(msg.media, MessageMediaDocument):
-            if msg.media.video:
-                vid_flag = True
-            elif msg.media.voice:
-                voice_flag = True
-        elif isinstance(msg.media, MessageMediaPoll):
-            poll_flag = True
-
-    return media_flag, img_flag, vid_flag, voice_flag, poll_flag
 
 
 def scrape_reactions(msg: Message, msg_dir: Path) -> int:
@@ -75,11 +55,10 @@ def scrape_metadata(
     msg: Message,
     msg_dir: Path,
     channel_url: str,
-    media_flags: tuple,
     paid_reactions: int,
 ) -> None:
     """
-    scrape some meta from msg and save it along with media_flags and paid reactions
+    scrape some meta from msg and save it along with paid reactions
     
     https://docs.telethon.dev/en/stable/modules/custom.html#telethon.tl.custom.message.Message
     """
@@ -104,11 +83,13 @@ def scrape_metadata(
         "fwd_from_flag": True if msg.fwd_from is not None else False,
         "fwd_from_info": None,  # if fwd_from_flag is True, this will contain the fwd from ch info
 
-        "media": media_flags[0],
-        "photo": media_flags[1],
-        "video": media_flags[2],
-        "voice": media_flags[3],
-        "poll": media_flags[4],
+        "photo": True if msg.photo else False,
+        "document": True if msg.document else False,
+        "web": True if msg.web_preview else False,
+        "audio": True if msg.audio else False,
+        "voice": True if msg.voice else False,
+        "video": True if msg.video else False,
+        "gif": True if msg.gif else False,
     }
 
     # scrape info about "fwd_from" channel if so
@@ -121,10 +102,19 @@ def scrape_metadata(
 
 
 def scrape_text(msg: Message, msg_dir: Path) -> None:
-    """scrape text from message content and save (in future mb some preprocessing)"""
-    if msg.message:
-        with open(msg_dir / "message.txt", "w") as f:
-            f.write(msg.message)
+    """
+    scrape text from message content and save
+    
+    2 files: with formatting (format_text.txt) and w/o formatting (raw_text.txt)
+    """
+    if msg.raw_text:
+        with open(msg_dir / "raw_text.txt", "w") as f:
+            f.write(msg.raw_text)
+
+    if msg.text:
+        with open(msg_dir / "format_txt.txt", "w") as f:
+            f.write(msg.text)
+    
 
 
 def scrape_url(msg: Message, msg_dir: Path) -> None:
@@ -150,9 +140,8 @@ def scrape_msg(msg: Message, channel_url: str, msg_dir: Path) -> None:
     now: media flags, reactions
     """
 
-    media_flags = scrape_media(msg)
     paid_reactions = scrape_reactions(msg, msg_dir)
-    scrape_metadata(msg, msg_dir, channel_url, media_flags, paid_reactions)
+    scrape_metadata(msg, msg_dir, channel_url, paid_reactions)
     scrape_text(msg, msg_dir)
     scrape_url(msg, msg_dir)
 
