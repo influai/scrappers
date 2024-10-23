@@ -4,19 +4,41 @@ from pathlib import Path
 
 from telethon.tl.custom.message import Message
 from telethon.tl.types import (
+    GeoPoint,
     MessageEntityTextUrl,
-    MessageMediaPoll,
+    MessageFwdHeader,
     ReactionCustomEmoji,
     ReactionEmoji,
     ReactionPaid,
-    MessageFwdHeader
 )
+
+
+def scrape_geo(msg: Message) -> tuple[float, float] | None:
+    """scrape the long, lat from geo if any"""
+    if isinstance(msg.geo, GeoPoint):
+        return (msg.geo.long, msg.geo.lat)
+    if msg.venue and isinstance(msg.venue.geo, GeoPoint):
+        return (msg.venue.geo.long, msg.venue.geo.lat)
+    return None
+
+
+def scrape_poll(msg: Message):
+    """scrape the text info from poll and number of total voters"""
+    if not msg.poll:
+        return None
+
+    poll_info = [
+        msg.poll.poll.question.text,
+        [answer.text.text for answer in msg.poll.poll.answers],
+        msg.poll.results.total_voters,
+    ]
+    return poll_info
 
 
 def scrape_forward_from_info(fwd_from: MessageFwdHeader) -> dict:
     """
     scrape info about channel from which msg was forwarded and save this info
-    
+
     https://tl.telethon.dev/constructors/message_fwd_header.html
     """
     info = {
@@ -59,30 +81,24 @@ def scrape_metadata(
 ) -> None:
     """
     scrape some meta from msg and save it along with paid reactions
-    
+
     https://docs.telethon.dev/en/stable/modules/custom.html#telethon.tl.custom.message.Message
     """
     msg_metadata = {
         "id": msg.id,
         "url": f"{channel_url}/{msg.id}",
-
         "date": str(msg.date),
-
         "views": msg.views,
         "paid_reactions": paid_reactions,
         "forwards": msg.forwards,
-
         "silent": msg.silent,
         "post": msg.post,
         "noforwards": msg.noforwards,
         "pinned": msg.pinned,
-        
         "via_bot_id": msg.via_bot_id,
         "via_business_bot_id": msg.via_business_bot_id,
-
         "fwd_from_flag": True if msg.fwd_from is not None else False,
         "fwd_from_info": None,  # if fwd_from_flag is True, this will contain the fwd from ch info
-
         "photo": True if msg.photo else False,
         "document": True if msg.document else False,
         "web": True if msg.web_preview else False,
@@ -90,6 +106,10 @@ def scrape_metadata(
         "voice": True if msg.voice else False,
         "video": True if msg.video else False,
         "gif": True if msg.gif else False,
+        "geo": scrape_geo(msg),  # (long: int, lat: int) if has geo, None else
+        "poll": scrape_poll(
+            msg
+        ),  # (question: str, answer(s): list[str], n_voters: int) if has poll, None else
     }
 
     # scrape info about "fwd_from" channel if so
@@ -104,7 +124,7 @@ def scrape_metadata(
 def scrape_text(msg: Message, msg_dir: Path) -> None:
     """
     scrape text from message content and save
-    
+
     2 files: with formatting (format_text.txt) and w/o formatting (raw_text.txt)
     """
     if msg.raw_text:
@@ -114,7 +134,6 @@ def scrape_text(msg: Message, msg_dir: Path) -> None:
     if msg.text:
         with open(msg_dir / "format_txt.txt", "w") as f:
             f.write(msg.text)
-    
 
 
 def scrape_url(msg: Message, msg_dir: Path) -> None:
