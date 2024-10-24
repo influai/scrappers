@@ -110,6 +110,7 @@ def scrape_metadata(
         "poll": scrape_poll(
             msg
         ),  # (question: str, answer(s): list[str], n_voters: int) if has poll, None else
+        "comments": scrape_comments(msg)
     }
 
     # scrape info about "fwd_from" channel if so
@@ -147,9 +148,18 @@ def scrape_url(msg: Message, msg_dir: Path) -> None:
         json.dump(urls, f, indent=4, ensure_ascii=False)
 
 
-def scrape_comments(msg: Message):
-    """maybe need this"""
-    pass
+def scrape_comments(msg: Message) -> int | None:
+    """
+    scrape the number of comments of post
+
+    if the comments on this post are not allowed it has None
+    in other cases it has the actual number of comments
+
+    https://tl.telethon.dev/constructors/message_replies.html
+    """
+    if msg.replies:
+        return msg.replies.replies
+    return None
 
 
 def scrape_msg(msg: Message, channel_url: str, msg_dir: Path) -> None:
