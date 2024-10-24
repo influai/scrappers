@@ -8,35 +8,91 @@ import msg_scrappers
 import pandas as pd
 import utils
 from telethon import TelegramClient, functions
+from telethon.types import ChannelFull
 from tqdm.asyncio import tqdm
 
 
-async def prepare_channel(client: TelegramClient, channel_url: str) -> Path:
-    """create channel dir and extract and save channel metadata"""
-    # extract metadata
-    #  https://tl.telethon.dev/methods/channels/get_messages.html
-    chatfull = await client(functions.channels.GetFullChannelRequest(channel_url))
-    metadata = {
-        "id": chatfull.full_chat.id,
-        "url": channel_url,
-        "title": chatfull.chats[0].title,
-        "about": chatfull.full_chat.about,
-        "participants": chatfull.full_chat.participants_count,
-        "last_pinned_msg_id": chatfull.full_chat.pinned_msg_id,
-    }
+async def scrape_similar_channels(
+    client: TelegramClient, channel_full: ChannelFull
+) -> list | None:
+    """
+    Finds and returns a list of similar Telegram channels based on recommendations.
+    """
+    try:
+        # Request similar channel recommendations via Telegram API
+        result = await utils.safe_api_request(
+            client(
+                functions.channels.GetChannelRecommendationsRequest(
+                    channel=channel_full
+                )
+            ),
+            "retrieving similar channels",
+        )
 
-    # create channel dir
-    channel_dir = Path("data/" + str(chatfull.full_chat.id))
-    channel_dir.mkdir(exist_ok=True)
+        # Return None if no recommendations are found
+        if not result:
+            return None
 
-    # save metadata
-    with open(channel_dir / "meta.json", "w") as f:
-        json.dump(metadata, f, indent=4, ensure_ascii=False)
+        # Process and collect similar channel details
+        similar_channels = [
+            {"username": ch.username, "title": ch.title, "id": ch.id}
+            for ch in result.chats
+        ]
 
-    logging.info(
-        f'successfully get channel metadata and save in {channel_dir / "meta.json"}'
-    )
-    return channel_dir
+        return similar_channels
+
+    except Exception as e:
+        logging.error(
+            f"Error retrieving similar channels for channel ID {channel_full.id}: {e}"
+        )
+        return None
+
+
+async def prepare_channel(client: TelegramClient, channel_url: str) -> Path | None:
+    """
+    Prepares a directory for the channel, saves channel metadata, and finds similar channels.
+    Returns the path to the created channel directory.
+    """
+    try:
+        # Retrieve full channel details via Telegram API
+        full = await utils.safe_api_request(
+            client(functions.channels.GetFullChannelRequest(channel_url)),
+            "retrieving channel entity",
+        )
+        full_channel = full.full_chat
+
+        # Extract channel metadata
+        metadata = {
+            "id": full_channel.id,
+            "url": channel_url,
+            "title": full.chats[0].title,
+            "about": full_channel.about,
+            "participants": full_channel.participants_count,
+            "last_pinned_msg_id": full_channel.pinned_msg_id,
+        }
+
+        # Create a directory for the channel to store metadata and similar channels
+        channel_dir = Path(f"data/{full_channel.id}")
+        channel_dir.mkdir(exist_ok=True)
+
+        # Save channel metadata to a JSON file
+        metadata_path = channel_dir / "meta.json"
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=4, ensure_ascii=False)
+
+        logging.info(f"Successfully saved channel metadata to {metadata_path}")
+
+        # Find and save similar channels
+        similar_channels = await scrape_similar_channels(client, full_channel)
+        similar_channels_path = channel_dir / "similar_channels.json"
+        with open(similar_channels_path, "w") as f:
+            json.dump(similar_channels, f, indent=4, ensure_ascii=False)
+
+        return channel_dir
+
+    except Exception as e:
+        logging.error(f"Error retrieving channel entity for URL {channel_url}: {e}")
+        return None
 
 
 async def scrape_channel(
@@ -46,54 +102,65 @@ async def scrape_channel(
     to_date: datetime,
     runs_info: pd.DataFrame,
 ) -> tuple[list, pd.DataFrame]:
-    err = []
-
+    """
+    Scrapes messages from a Telegram channel between the specified date range,
+    tracks the run info, and returns any errors and updated run info.
+    """
+    errors = []
     launch_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     start_time = time.time()
 
-    # extract channel metadata + create dir
+    # Prepare channel directory and metadata
     channel_dir = await prepare_channel(client, channel_url)
 
-    # find lastest 'to_date' and oldest 'from_date' from 'runs_info'
-    lastest, oldest = utils.last_old_dates(runs_info, channel_url)
-    # change the from_date based on this
-    if lastest is not None and oldest is not None:
-        if from_date > oldest:
-            from_date = lastest
+    if not channel_dir:
+        logging.error(f"Failed to prepare channel directory for {channel_url}")
+        return errors, runs_info
 
-    posts_scrapped = 0
-    pbar = tqdm(desc="processing posts", unit="post")
+    # Determine the most recent 'to_date' and earliest 'from_date' based on run history
+    latest, oldest = utils.last_old_dates(runs_info, channel_url)
+    if latest is not None and oldest is not None and from_date > oldest:
+        from_date = latest
 
-    logging.info(f"starting the posts processing from {from_date} to {to_date}")
-    # wait_time is needed because we dont want to get banned :)
+    posts_scraped = 0
+    progress_bar = tqdm(desc="Processing posts", unit="post")
+
+    logging.info(f"Starting to process posts from {from_date} to {to_date}")
+
+    # Iterate through messages and scrape them
     async for msg in client.iter_messages(
         channel_url, reverse=True, offset_date=from_date, limit=None, wait_time=5
     ):
         try:
             if msg.date <= to_date:
-                # create msg dir for each msg inside channel dir
+                # Create a directory for each message within the channel's directory
                 msg_dir = channel_dir / str(msg.id)
                 msg_dir.mkdir(exist_ok=True)
 
+                # Scrape and save the message data
                 msg_scrappers.scrape_msg(msg, channel_url, msg_dir)
 
-                posts_scrapped += 1
-                pbar.update(1)
+                posts_scraped += 1
+                progress_bar.update(1)
             else:
                 break
 
         except Exception as e:
-            err.append(e)
+            errors.append(e)
+            logging.error(f"Error scraping message {msg.id} in {channel_url}: {e}")
             continue
 
-    # save run info
+    # Save the run information (timestamps, post counts, etc.)
     runs_info = utils.save_run(
         runs_info,
         channel_url,
         from_date,
         to_date,
-        posts_scrapped,
+        posts_scraped,
         launch_time,
         time.time() - start_time,
     )
-    return err, runs_info
+
+    logging.info(f"Finished scraping posts. Total posts scraped: {posts_scraped}")
+
+    return errors, runs_info
