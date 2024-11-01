@@ -1,0 +1,4 @@
+parsing:
+  channel_url: https://t.me/murmansktalk  # channel url here
+  from_date: 25-10-2024  # DD-MM-YYYY
+  to_date: 1-11-2024  # DD-MM-YYYY   !!!don't set to the future dates pls
