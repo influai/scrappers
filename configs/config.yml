@@ -1,14 +1,4 @@
-tg_client:
-  session: wandering
-  api_id: 1234567890  # your id (int!)
-  api_hash: qwertyu1234567  # your hash (str!)
-
-  # use this to fill below data - https://github.com/LonamiWebs/Telethon/issues/4051
-  device_model: X540UAR
-  system_version: Linux ubuntu GNOME Wayland glibc 2.39
-  app_version: 5.6.3 Snap
-
 parsing:
-  channel_url: https://t.me/lilbebik  # channel url here
-  from_date: 21-10-2024  # DD-MM-YYYY
-  to_date: 24-10-2024  # DD-MM-YYYY   !!!don't set to the future dates pls
+  channel_url: https://t.me/murmansktalk  # channel url here
+  from_date: 25-10-2024  # DD-MM-YYYY
+  to_date: 1-11-2024  # DD-MM-YYYY   !!!don't set to the future dates pls

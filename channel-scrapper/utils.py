@@ -30,7 +30,7 @@ async def safe_api_request(coroutine, comment):
     return None
 
 
-def load_configs(config_path: Path) -> tuple[dict, str, datetime, datetime]:
+def load_configs(config_path: Path) -> tuple[str, datetime, datetime]:
     """
     Loads configurations from a YAML file.
 
@@ -38,12 +38,11 @@ def load_configs(config_path: Path) -> tuple[dict, str, datetime, datetime]:
         config_path (Path): Path to the YAML configuration file.
 
     Returns:
-        tuple: tg_client, channel_url, from_date, to_date loaded from the config file.
+        tuple: channel_url, from_date, to_date loaded from the config file.
     """
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
-    tg_client = config["tg_client"]
     channel_url = config["parsing"]["channel_url"]
 
     # Convert dates from string to datetime with UTC timezone
@@ -56,7 +55,7 @@ def load_configs(config_path: Path) -> tuple[dict, str, datetime, datetime]:
 
     logging.info(f"Configs successfully loaded, parsing channel: {channel_url}")
 
-    return tg_client, channel_url, from_date, to_date
+    return channel_url, from_date, to_date
 
 
 def create_or_load_csv(file_name: Path) -> pd.DataFrame:
@@ -110,10 +109,10 @@ def last_old_dates(
         return None, None
 
     # Convert date columns to datetime with UTC timezone
-    channel_data["from_date"] = pd.to_datetime(channel_data["from_date"]).dt.tz_convert(
+    channel_data.loc[:, "from_date"] = pd.to_datetime(channel_data["from_date"]).dt.tz_convert(
         timezone.utc
     )
-    channel_data["to_date"] = pd.to_datetime(channel_data["to_date"]).dt.tz_convert(
+    channel_data.loc[:, "to_date"] = pd.to_datetime(channel_data["to_date"]).dt.tz_convert(
         timezone.utc
     )
 

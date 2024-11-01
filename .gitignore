@@ -2,3 +2,4 @@
 /data/*
 channel_scrapper.log
 *.session
+.env

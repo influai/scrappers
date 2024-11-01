@@ -1,8 +1,10 @@
 import logging
+import os
 from pathlib import Path
 
 import channel_scrappers
 import utils
+from dotenv import load_dotenv
 from telethon import TelegramClient
 
 # Configure logging
@@ -14,18 +16,25 @@ logging.basicConfig(
 )
 logging.info("Channel scrapper has started.")
 
-# Load configurations (Telegram client credentials, channel URL, date range)
-tg_client, channel_url, from_date, to_date = utils.load_configs(
-    Path("configs", "config.yml")
-)
+# Load channel scrapping configurations (channel URL, date range)
+channel_url, from_date, to_date = utils.load_configs(Path("configs", "config.yml"))
+
+# Load environment variables (tg api and db creds) from .env
+load_dotenv()
 
 # Load or create a CSV to track scraping runs
 runs_info_path = Path("data", "runs_info.csv")
 run_info = utils.create_or_load_csv(runs_info_path)
 
 # Initialize the Telegram client with loaded configurations
-telegram_client = TelegramClient(**tg_client)
-
+telegram_client = TelegramClient(
+    session=os.getenv("TG_SESSION"),
+    api_id=os.getenv("TG_API_ID"),
+    api_hash=os.getenv("TG_API_HASH"),
+    device_model=os.getenv("TG_DEVICE_MODEL"),
+    system_version=os.getenv("TG_SYSTEM_VERSION"),
+    app_version=os.getenv("TG_APP_VERSION"),
+)
 
 async def main():
     try:
