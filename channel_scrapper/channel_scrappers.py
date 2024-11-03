@@ -52,7 +52,6 @@ async def scrape_similar_channels(
             )
 
             db_session.execute(stmt)
-            db_session.commit()
 
             logging.info(
                 f"Successfully upserted {len(similars_data_batch)} similar channels for channel ID {channel_full.id}"
@@ -100,7 +99,6 @@ async def scrape_channel_metadata(
         )
 
         db_session.execute(stmt)
-        db_session.commit()
 
         await scrape_similar_channels(client, full_channel, db_session)
 
@@ -137,7 +135,7 @@ async def scrape_channel(
     logging.info(f"Starting to process posts from {from_date} to {to_date}")
 
     async for msg in client.iter_messages(
-        channel_url, reverse=True, offset_date=from_date, limit=None, wait_time=1
+        channel_url, reverse=True, offset_date=from_date, limit=None, wait_time=3
     ):
         try:
             if msg.date <= to_date:
@@ -163,9 +161,6 @@ async def scrape_channel(
         await scrape_msgs_batch(messages_batch, channel_id, channel_url, db_session)
         posts_scraped += len(messages_batch)
 
-    # Commit all posts to DB
-    db_session.commit()
-
     # Save the run information (timestamps, post counts, etc.) to DB
     db_session.add(
         Runs(
@@ -178,7 +173,6 @@ async def scrape_channel(
             exec_time=time.time() - start_time,
         )
     )
-    db_session.commit()
 
     logging.info(f"Finished scraping posts. Total posts scraped: {posts_scraped}")
 

@@ -52,14 +52,15 @@ def scrape_forward(msg: Message, to_ch_id: int) -> Forwards | None:
     """
     Extracts information about the original channel a message was forwarded from.
     """
-    if msg.fwd_from and msg.fwd_from.from_id:
+    try:
         return Forwards(
             from_ch_id=msg.fwd_from.from_id.channel_id,
             from_post_id=msg.fwd_from.channel_post,
             to_ch_id=to_ch_id,
             to_post_id=msg.id,
         )
-    return None
+    except Exception:
+        return None
 
 
 def scrape_reactions(msg: Message) -> Tuple[int, dict, dict]:
@@ -213,5 +214,4 @@ async def scrape_msgs_batch(
         forward_stmt = forward_stmt.on_conflict_do_nothing()
         db_session.execute(forward_stmt)
 
-    db_session.commit()
     logging.info(f"Successfully upserted {len(post_data_batch)} messages in batch")
