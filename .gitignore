@@ -1,5 +1,7 @@
-*/__pycache__
-/data/*
-channel_scrapper.log
-*.session
 .env
+channel_scrapper.log
+parsed_channels.csv
+
+*/__pycache__
+*.session
+*.session-journal
