@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 from pathlib import Path
@@ -8,30 +9,13 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
-from tqdm import tqdm
 
 from db_handler.connection import get_session
 
 from .channel_scrappers import scrape_channel
 from .utils import format_channel_url, load_configs
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    filename=Path("channel_scrapper.log"),
-    filemode="w",
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
-logging.info("Channel scrapper has started.")
-
-# Load channel scrapping configurations (date range)
-from_date, to_date = load_configs(Path("config.yml"))
-# Load @channelnames for CSV
-csv_path = "parsed_channels_part2.csv"
-df = pd.read_csv(csv_path)
-
-# Load Telegram API creds from .env
+# Load environment variables
 load_dotenv()
 REQUIRED_ENV_VARS = [
     "TG_API_ID",
@@ -47,9 +31,43 @@ if missing_vars:
         f"Missing required environment variables: {', '.join(missing_vars)}"
     )
 
+# Set up argparse for command-line arguments
+parser = argparse.ArgumentParser(description="Telegram channel scraper")
+parser.add_argument(
+    "--csv_path",
+    required=True,
+    help="Path to the CSV file containing channels to scrape",
+)
+args = parser.parse_args()
+
+# Load channels to parse info from CSV specified in command line
+channels_to_parse = pd.read_csv(args.csv_path)
+
+# Set up logging directory based on TG_SESSION environment variable
+session_name = os.getenv("TG_SESSION")
+if not session_name:
+    raise EnvironmentError("Environment variable TG_SESSION is not set.")
+
+session_dir = Path("logs", session_name)
+session_dir.mkdir(exist_ok=True, parents=True)
+log_file = session_dir / "channel_scraper.log"
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    filename=log_file,
+    filemode="w",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+logging.info("Channel scraper has started.")
+
+# Load channel scraping configurations (date range)
+from_date, to_date = load_configs(Path("config.yml"))
+
 # Initialize the Telegram client with loaded configurations
 telegram_client = TelegramClient(
-    session=os.getenv("TG_SESSION"),
+    session=Path(session_dir, session_name),
     api_id=os.getenv("TG_API_ID"),
     api_hash=os.getenv("TG_API_HASH"),
     device_model=os.getenv("TG_DEVICE_MODEL"),
@@ -60,47 +78,49 @@ telegram_client = TelegramClient(
 
 async def main() -> None:
     session_generator = get_session()
+    total_channels = channels_to_parse.shape[0]
 
-    for index, row in tqdm(df.iterrows(), total=df.shape[0], desc="Scraping channels"):
+    for index, row in channels_to_parse.iterrows():
         channel_url = format_channel_url(row["tg_name"])
         if not channel_url:
             logging.warning(f"Skipping invalid or missing tg_name for row {index}")
+            print(
+                f"{index+1}/{total_channels}: {channel_url} - Skipping due to invalid/missing tg_name"
+            )
             continue
 
-        db_session: Session = next(session_generator)
-        logging.info(f"Starting scraping for channel: {channel_url}")
+        try:
+            print(
+                f"{index+1}/{total_channels}: Starting scraping channel {channel_url}"
+            )
 
-        while True:
-            try:
-                error = await scrape_channel(
-                    telegram_client, channel_url, from_date, to_date, db_session
-                )
-                db_session.commit()
-
-                if error:
-                    logging.warning(
-                        f"Error encountered while scraping {channel_url}: {error}"
+            db_session: Session = next(
+                session_generator
+            )  # new db session for every channel, as else i got disconnected for idle
+            while True:
+                try:
+                    await scrape_channel(
+                        telegram_client, channel_url, from_date, to_date, db_session
                     )
-                else:
-                    logging.info(f"Scraping completed successfully for {channel_url}")
-                sleep(3)
-                break
+                    break
+                except FloodWaitError as fwe:
+                    logging.error(
+                        f"FloodWaitError({fwe.seconds}) encountered. Waiting for {fwe.seconds} seconds."
+                    )
+                    print(
+                        f"{index+1}/{total_channels}: {channel_url} - Waiting due to FloodWaitError ({fwe.seconds}s)"
+                    )
+                    sleep(fwe.seconds)
 
-            except FloodWaitError as fwe:
-                wait_sec = fwe.seconds if fwe.seconds else 5
-                msg = f"FloodWaitError({fwe.seconds}) encountered when scraping {channel_url}. Waiting for {wait_sec} seconds before retrying."
-                logging.error(msg)
-                print(msg)
-                sleep(wait_sec)
+            db_session.commit()
+            db_session.close()
 
-            except Exception as ex:
-                logging.error(
-                    f"Skip scraping {channel_url} because of an error: {ex}",
-                    exc_info=True,
-                )
-                break  # Exit the loop on non-FloodWaitError exceptions
+            logging.info(f"Scraping completed successfully for {channel_url}")
+            print(f"{index+1}/{total_channels}: {channel_url} - Success")
 
-        db_session.close()
+        except Exception as ex:
+            logging.error(f"Error scraping {channel_url}: {ex}", exc_info=True)
+            print(f"{index+1}/{total_channels}: {channel_url} - Error: {ex}")
 
 
 with telegram_client:

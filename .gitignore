@@ -1,7 +1,4 @@
 .env
-channel_scrapper.log
-parsed_channels.csv
 
+/logs
 */__pycache__
-*.session
-*.session-journal

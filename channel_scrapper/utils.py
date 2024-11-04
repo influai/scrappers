@@ -1,32 +1,11 @@
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
+
 import pandas as pd
 import yaml
-from telethon.errors import RpcCallFailError
 
 # Date format used in the configuration file
 DATE_FORMAT = "%d-%m-%Y"
-
-
-async def safe_api_request(coroutine, comment):
-    """
-    Safely executes an asynchronous API request, handling exceptions.
-
-    Args:
-        coroutine (Awaitable): The asynchronous request to execute.
-        comment (str): Description of the action for logging purposes.
-
-    Returns:
-        The result of the coroutine if successful, otherwise None.
-    """
-    try:
-        return await coroutine
-    except RpcCallFailError as e:
-        logging.error(f"[!] Telegram API error, {comment}: {str(e)}")
-    except Exception as e:
-        logging.error(f"[!] General error, {comment}: {str(e)}")
-    return None
 
 
 def load_configs(config_path: Path) -> tuple[datetime, datetime]:
