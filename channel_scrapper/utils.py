@@ -32,12 +32,10 @@ def load_configs(config_path: Path) -> tuple[datetime, datetime]:
     return from_date, to_date
 
 
-def format_channel_url(tg_name) -> None | str:
-    """Convert @channel_name format to https://t.me/channel_name URL."""
+def format_channel_name(tg_name) -> None | str:
+    """Check and convert @channel_name format to just channel_name."""
     if pd.isna(tg_name) or not tg_name:
         return None
     if tg_name.startswith("@"):
-        return f"https://t.me/{tg_name[1:]}"
-    elif tg_name.startswith("https://t.me/"):
-        return tg_name
+        return tg_name[1:]
     return None

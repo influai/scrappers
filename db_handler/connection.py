@@ -47,4 +47,8 @@ def get_session():
 
 # Create all tables in the database based on the models
 def init_db():
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine, checkfirst=True)
+
+
+if __name__ == "__main__":
+    init_db()

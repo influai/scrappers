@@ -58,7 +58,7 @@ class Post(Base):
     __tablename__ = "post"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    channel_id: Mapped[int] = mapped_column(ForeignKey("channel.id"))
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channel.id", ondelete="CASCADE"))
     channel: Mapped["Channel"] = relationship("Channel", back_populates="posts")
     url: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -128,8 +128,8 @@ class Forwards(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     from_ch_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     from_post_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    to_ch_id: Mapped[int] = mapped_column(ForeignKey("channel.id"), nullable=False)
-    to_post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
+    to_ch_id: Mapped[int] = mapped_column(ForeignKey("channel.id", ondelete="CASCADE"), nullable=False)
+    to_post_id: Mapped[int] = mapped_column(ForeignKey("post.id",  ondelete="CASCADE"), nullable=False)
 
     to_post: Mapped["Post"] = relationship("Post", back_populates="fwd_from_info")
 
@@ -141,7 +141,7 @@ class Runs(Base):
     __tablename__ = "runs"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    channel_id: Mapped[int] = mapped_column(ForeignKey("channel.id"))
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channel.id", ondelete="CASCADE"))
     channel_url: Mapped[str] = mapped_column(String)
     from_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     to_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -153,3 +153,21 @@ class Runs(Base):
 
     def __repr__(self) -> str:
         return f"Runs(id={self.id!r}, channel_id={self.channel_id!r}, scrape_date={self.scrape_date!r})"
+
+
+class Peers(Base):
+    """
+    Stores data about channel peer (id, access_hash) with corresponding scraper_name.
+
+    Note: The access_hash is unique to each account (scraper).
+    """
+    __tablename__ = "peers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    scraper_name: Mapped[str] = mapped_column(String)
+    channel_name: Mapped[str] = mapped_column(String)
+    channel_id: Mapped[int] = mapped_column(BigInteger)
+    access_hash: Mapped[int] = mapped_column(BigInteger)
+
+    def __repr__(self) -> str:
+        return f"Peers(id={self.id!r}, scraper_name={self.scraper_name!r}), channel_id={self.channel_id!r}"

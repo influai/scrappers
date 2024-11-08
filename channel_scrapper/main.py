@@ -13,7 +13,8 @@ from telethon.errors import FloodWaitError
 from db_handler.connection import get_session
 
 from .channel_scrappers import scrape_channel
-from .utils import format_channel_url, load_configs
+from .utils import format_channel_name, load_configs
+
 
 # Load environment variables
 load_dotenv()
@@ -79,19 +80,18 @@ telegram_client = TelegramClient(
 async def main() -> None:
     session_generator = get_session()
     total_channels = channels_to_parse.shape[0]
-
     for index, row in channels_to_parse.iterrows():
-        channel_url = format_channel_url(row["tg_name"])
-        if not channel_url:
+        channel_name = format_channel_name(row["tg_name"])
+        if not channel_name:
             logging.warning(f"Skipping invalid or missing tg_name for row {index}")
             print(
-                f"{index+1}/{total_channels}: {channel_url} - Skipping due to invalid/missing tg_name"
+                f"{index+1}/{total_channels}: {channel_name} - Skipping due to invalid/missing tg_name"
             )
             continue
 
         try:
             print(
-                f"{index+1}/{total_channels}: Starting scraping channel {channel_url}"
+                f"{index+1}/{total_channels}: Starting scraping channel @{channel_name}"
             )
 
             db_session: Session = next(
@@ -100,27 +100,32 @@ async def main() -> None:
             while True:
                 try:
                     await scrape_channel(
-                        telegram_client, channel_url, from_date, to_date, db_session
+                        telegram_client,
+                        channel_name,
+                        from_date,
+                        to_date,
+                        db_session,
+                        scraper_name=session_name,
                     )
                     break
                 except FloodWaitError as fwe:
                     logging.error(
-                        f"FloodWaitError({fwe.seconds}) encountered. Waiting for {fwe.seconds} seconds."
+                        f"{fwe}\nFloodWaitError({fwe.seconds}) encountered. Waiting for {fwe.seconds} seconds."
                     )
                     print(
-                        f"{index+1}/{total_channels}: {channel_url} - Waiting due to FloodWaitError ({fwe.seconds}s)"
+                        f"{index+1}/{total_channels}: @{channel_name} - Waiting due to FloodWaitError ({fwe.seconds}s)"
                     )
                     sleep(fwe.seconds)
 
             db_session.commit()
             db_session.close()
 
-            logging.info(f"Scraping completed successfully for {channel_url}")
-            print(f"{index+1}/{total_channels}: {channel_url} - Success")
+            logging.info(f"Scraping completed successfully for @{channel_name}")
+            print(f"{index+1}/{total_channels}: @{channel_name} - Success")
 
         except Exception as ex:
-            logging.error(f"Error scraping {channel_url}: {ex}", exc_info=True)
-            print(f"{index+1}/{total_channels}: {channel_url} - Error: {ex}")
+            logging.error(f"Error scraping @{channel_name}: {ex}", exc_info=True)
+            print(f"{index+1}/{total_channels}: @{channel_name} - Error: {ex}")
 
 
 with telegram_client:

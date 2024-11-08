@@ -114,7 +114,7 @@ def scrape_comments(msg: Message) -> int | None:
 
 
 async def scrape_msgs_batch(
-    messages: List[Message], channel_id: int, channel_url: str, db_session: Session
+    messages: List[Message], channel_id: int, channel_name: str, db_session: Session
 ) -> None:
     post_data_batch = []
     forward_data_batch = []
@@ -126,7 +126,7 @@ async def scrape_msgs_batch(
         post_data = {
             "id": msg.id,
             "channel_id": channel_id,
-            "url": f"{channel_url}/{msg.id}",
+            "url": f"https://t.me/{channel_name}/{msg.id}",
             "post_date": msg.date,
             "scrape_date": datetime.now(tz=timezone.utc),
             "views": msg.views,
@@ -156,7 +156,6 @@ async def scrape_msgs_batch(
             "urls": scrape_urls(msg),
         }
         post_data_batch.append(post_data)
-
         # Scrape forward data if the message is forwarded
         fwd_record = scrape_forward(msg, channel_id)
         if fwd_record:
