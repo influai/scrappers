@@ -13,7 +13,7 @@ from db_handler.database import Channel, Runs, Similars, Peers
 from .msg_scrappers import scrape_msgs_batch
 
 
-SLEEP_BETWEEN_CHANNELS = 15
+SLEEP_BETWEEN_CHANNELS = 45
 
 
 async def get_channel_peer(
@@ -143,6 +143,7 @@ async def scrape_channel_metadata(
 
     await scrape_similar_channels(client, channel, channel_name, db_session)
 
+    db_session.commit()
     logging.info(f"Successfully scraped metadata for channel @{channel_name}.")
 
 
@@ -177,7 +178,7 @@ async def scrape_channel(
     print(f"  Processing posts for @{channel_name}...")
 
     posts_scraped = 0
-    batch_size = 250
+    batch_size = 100
     messages_batch = []
 
     logging.info(f"Starting to process posts from {from_date} to {to_date}")
@@ -217,5 +218,6 @@ async def scrape_channel(
             exec_time=time.time() - start_time,
         )
     )
+    db_session.commit()
 
     logging.info(f"Finished scraping posts. Total posts scraped: {posts_scraped}")

@@ -213,4 +213,5 @@ async def scrape_msgs_batch(
         forward_stmt = forward_stmt.on_conflict_do_nothing()
         db_session.execute(forward_stmt)
 
+    db_session.commit()
     logging.info(f"Successfully upserted {len(post_data_batch)} messages in batch")

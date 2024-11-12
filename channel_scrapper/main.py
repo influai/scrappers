@@ -60,7 +60,7 @@ logging.basicConfig(
     filemode="w",
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
-logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.INFO)
 logging.info("Channel scraper has started.")
 
 # Load channel scraping configurations (date range)
@@ -116,9 +116,6 @@ async def main() -> None:
                         f"{index+1}/{total_channels}: @{channel_name} - Waiting due to FloodWaitError ({fwe.seconds}s)"
                     )
                     sleep(fwe.seconds)
-
-            db_session.commit()
-            db_session.close()
 
             logging.info(f"Scraping completed successfully for @{channel_name}")
             print(f"{index+1}/{total_channels}: @{channel_name} - Success")
