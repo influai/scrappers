@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Union
 
+from database.database import Forwards, Post
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 from telethon.tl.custom.message import Message
@@ -12,8 +13,6 @@ from telethon.tl.types import (
     ReactionEmoji,
     ReactionPaid,
 )
-
-from db_handler.database import Forwards, Post
 
 
 def scrape_geo(msg: Message) -> tuple[float, float] | None:
@@ -120,11 +119,9 @@ async def scrape_msgs_batch(
     forward_data_batch = []
 
     for msg in messages:
-
         paid_reactions, standard_reactions, custom_reactions = scrape_reactions(msg)
 
         post_data = {
-            "id": msg.id,
             "channel_id": channel_id,
             "url": f"https://t.me/{channel_name}/{msg.id}",
             "post_date": msg.date,

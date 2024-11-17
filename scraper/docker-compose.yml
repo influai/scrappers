@@ -1,0 +1,84 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   
+      - "15672:15672" 
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+
+  api:
+    image: api:latest
+    build: 
+      context: .
+      dockerfile: ./docker/api/Dockerfile
+    container_name: api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: user
+      RABBITMQ_PASS: password
+    depends_on:
+      - rabbitmq
+
+  scraper1:
+    image: scraper:latest
+    build:
+      context: .
+      dockerfile: ./docker/scraper/Dockerfile
+    container_name: scraper1234
+    restart: always
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: user
+      RABBITMQ_PASS: password
+      # TG app creds
+      TG_SESSION: qwe123  # This StringSession should be obtained from `init_script.py`
+      TG_API_ID: 1234  # Obtained from https://my.telegram.org/
+      TG_API_HASH: asd456  # Obtrained from https://my.telegram.org/
+      TG_DEVICE_MODEL: X540UAR  # The value here can be any value, as long as it is set
+      TG_SYSTEM_VERSION: Linux ubuntu GNOME Wayland glibc 2.39  # Just like the one above
+      TG_APP_VERSION: 5.6.3 Snap  # Just like the one above
+      # Our PostgreSQL creds
+      DB_IP: 1.2.3.4
+      DB_PORT: 1234
+      DB_NAME: name
+      DB_USER: user
+      DB_PASSWORD: password
+    depends_on:
+      - rabbitmq
+
+  scraper2:
+    image: scraper:latest
+    build:
+      context: .
+      dockerfile: ./docker/scraper/Dockerfile
+    container_name: scraper5678
+    restart: always
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: user
+      RABBITMQ_PASS: password
+      # TG app creds
+      TG_SESSION: uio987  # This StringSession should be obtained from `init_script.py`
+      TG_API_ID: 5678  # Obtained from https://my.telegram.org/
+      TG_API_HASH: kjh987  # Obtrained from https://my.telegram.org/
+      TG_DEVICE_MODEL: X540UAR  # The value here can be any value, as long as it is set
+      TG_SYSTEM_VERSION: Linux ubuntu GNOME Wayland glibc 2.39  # Just like the one above
+      TG_APP_VERSION: 5.6.3 Snap  # Just like the one above
+      # Our PostgreSQL creds
+      DB_IP: 1.2.3.4
+      DB_PORT: 1234
+      DB_NAME: name
+      DB_USER: user
+      DB_PASSWORD: password
+    depends_on:
+      - rabbitmq
+

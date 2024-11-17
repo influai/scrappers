@@ -1,3 +1,0 @@
-parsing:
-  from_date: 01-01-2024  # DD-MM-YYYY
-  to_date: 02-11-2025  # DD-MM-YYYY   !!!don't set to the future dates pls

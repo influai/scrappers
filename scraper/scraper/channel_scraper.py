@@ -2,25 +2,20 @@ import logging
 import time
 from datetime import datetime
 
+from database.database import Channel, Peers, Runs, Similars
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 from telethon import TelegramClient, functions
 from telethon.types import InputPeerChannel
 
-from db_handler.database import Channel, Runs, Similars, Peers
+from scraper.message_scraper import scrape_msgs_batch
 
-from .msg_scrappers import scrape_msgs_batch
-
-
-SLEEP_BETWEEN_CHANNELS = 45
+RESOLVE_USERNAME_SLEEP = 60  # Manual sleep in order to avoid FloodError from TG, in seconds
 
 
 async def get_channel_peer(
-        channel_name: str, 
-        scraper_name: str,
-        db_session: Session,
-        client: TelegramClient
+    channel_name: str, scraper_id: int, db_session: Session, client: TelegramClient
 ) -> InputPeerChannel:
     """
     Get the channel peer to corresponding scraper.
@@ -28,44 +23,38 @@ async def get_channel_peer(
     The function works as follows:
     1) Checks if peer data exists in the database and retrieves it.
     2) If it doesn't exist, calls `get_input_entity` (which may have a high timeout) to fetch the data.
-    
+
     Note: The access_hash is unique to each account (scraper).
     """
     # Query the database for an existing peer
     result = db_session.execute(
         select(Peers).where(
-            Peers.channel_name == channel_name,
-            Peers.scraper_name == scraper_name
+            Peers.channel_name == channel_name, Peers.scraper_id == scraper_id
         )
     )
     peer = result.scalar_one_or_none()
 
     if peer:
-        msg = f"Successfully loaded peer for channel @{channel_name}"
-        logging.info(msg)
-        print(msg)
+        logging.info(f"Successfully loaded peer for channel @{channel_name}")
         return InputPeerChannel(channel_id=peer.id, access_hash=peer.access_hash)
-    
-    msg = f"Peer not found for @{channel_name}\nCalling ResolveUsername and sleep for {SLEEP_BETWEEN_CHANNELS}s after to avoid FloodWaitError"
-    logging.info(msg)
-    print(msg)
+
+    logging.info(f"Peer not found for @{channel_name}, calling ResolveUsername")
 
     # Fetch the peer data from Telegram API
     entity = await client.get_input_entity(channel_name)
     assert isinstance(entity, InputPeerChannel)
     # Save new peer data to the database
     new_peer = Peers(
-        id=entity.channel_id,
         channel_name=channel_name,
-        scraper_name=scraper_name,
+        scraper_id=scraper_id,
         channel_id=entity.channel_id,
-        access_hash=entity.access_hash
+        access_hash=entity.access_hash,
     )
     db_session.add(new_peer)
     db_session.commit()
 
-    time.sleep(SLEEP_BETWEEN_CHANNELS)  # to avoid FloodWaitError for ResolveUsernameRequest
-    
+    time.sleep(RESOLVE_USERNAME_SLEEP)
+
     return entity
 
 
@@ -151,53 +140,47 @@ async def scrape_channel(
     client: TelegramClient,
     channel_name: str,
     from_date: datetime,
-    to_date: datetime,
     db_session: Session,
-    scraper_name: str,
+    scraper_id: int,
 ) -> None:
     """
-    Scrapes channel metadata and its posts between the specified date range.
+    Scrapes channel metadata and its posts from the specified date to present time.
     """
     launch_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     start_time = time.time()
 
     # Check if channel already scraped (stupid check now, later need to change)
-    if bool(
-        db_session.query(Channel).filter_by(url="https://t.me/" + channel_name).first()
-    ):
-        logging.info(f"Skipping @{channel_name}, already processed")
-        print(f"    @{channel_name} - Skipped (already processed)")
-        return
-    
+    # if bool(
+    #     db_session.query(Channel).filter_by(url="https://t.me/" + channel_name).first()
+    # ):
+    #     logging.info(f"Skipping @{channel_name}, already processed")
+    #     print(f"    @{channel_name} - Skipped (already processed)")
+    #     return
+
     # Get channel peer
-    channel: InputPeerChannel = await get_channel_peer(channel_name, scraper_name, db_session, client)
+    channel: InputPeerChannel = await get_channel_peer(
+        channel_name, scraper_id, db_session, client
+    )
 
     # Scrape channel metadata (with similar channels)
     await scrape_channel_metadata(client, channel, channel_name, db_session)
 
-    print(f"  Processing posts for @{channel_name}...")
-
     posts_scraped = 0
-    batch_size = 100
+    batch_size = 250
     messages_batch = []
 
-    logging.info(f"Starting to process posts from {from_date} to {to_date}")
+    logging.info(f"Starting to process posts from {from_date}")
 
-    async for msg in client.iter_messages(
-        channel, reverse=True, offset_date=from_date, limit=None, wait_time=3
-    ):
-        if msg.date <= to_date:
-            messages_batch.append(msg)
+    async for msg in client.iter_messages(channel, reverse=True, offset_date=from_date):
+        messages_batch.append(msg)
 
-            if len(messages_batch) >= batch_size:
-                await scrape_msgs_batch(
-                    messages_batch, channel.channel_id, channel_name, db_session
-                )
-                posts_scraped += len(messages_batch)
-                messages_batch = []
-                print(f"  {posts_scraped} posts processed so far...")
-        else:
-            break
+        if len(messages_batch) >= batch_size:
+            await scrape_msgs_batch(
+                messages_batch, channel.channel_id, channel_name, db_session
+            )
+            posts_scraped += len(messages_batch)
+            messages_batch = []
+            logging.info(f"{posts_scraped} posts processed so far...")
 
     # Process any remaining messages
     if messages_batch:
@@ -212,7 +195,6 @@ async def scrape_channel(
             channel_id=channel.channel_id,
             channel_url="https://t.me/" + channel_name,
             from_date=from_date,
-            to_date=to_date,
             scrape_date=launch_time,
             posts_scraped=posts_scraped,
             exec_time=time.time() - start_time,
