@@ -8,11 +8,11 @@ from telethon.sessions import StringSession
 from telethon.sync import TelegramClient
 
 creds = {
-    "TG_API_ID": 1234,
-    "TG_API_HASH": "qwerty678",
-    "TG_DEVICE_MODEL": "X540UAR",
-    "TG_SYSTEM_VERSION": "Linux ubuntu GNOME Wayland glibc 2.39",
-    "TG_APP_VERSION": "5.6.3 Snap",
+    "TG_API_ID": 123456,  # obtain this from my.telegram.org
+    "TG_API_HASH": "qwer1234",  # obtain this from my.telegram.org
+    "TG_DEVICE_MODEL": "X540UAR",  # can left such value
+    "TG_SYSTEM_VERSION": "Linux ubuntu GNOME Wayland glibc 2.39",  # can left such value
+    "TG_APP_VERSION": "5.6.3 Snap",  # can left such value
 }
 
 with TelegramClient(

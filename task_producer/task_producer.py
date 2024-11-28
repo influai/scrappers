@@ -31,20 +31,22 @@ class TaskManager:
         """Establish connection to RabbitMQ"""
         return await aio_pika.connect_robust(**self.rabbit_params)
 
-    async def send_scrape_task(self, channel_name: str) -> None:
+    async def send_scrape_task(self, channel_name: str, from_date: str) -> None:
         """
         Send a single channel scraping task to the queue
         
         Args:
-            channel_name: Channel username (with or without @ prefix)
+            channel_name: Channel username (without @ prefix)
+            from_date: Date from which to scrape in format: 'DD-MM-YYYY'
         """
-        # Ensure channel name starts with @
-        if not channel_name.startswith('@'):
-            channel_name = f"@{channel_name}"
+        # Ensure channel name doesnt start with @
+        if channel_name.startswith('@'):
+            channel_name = channel_name[1:]
 
         task = {
             "type": "scrape",
-            "channel_name": channel_name
+            "channel_name": channel_name,
+            "from_date": from_date,
         }
 
         async with await self.connect() as connection:
@@ -62,28 +64,29 @@ class TaskManager:
             )
             logging.info(f"Sent scraping task for channel: {channel_name}")
 
-    async def send_bulk_scrape_tasks(self, channel_names: List[str]) -> None:
+    async def send_bulk_scrape_tasks(self, channel_names: List[str], from_date: str) -> None:
         """
         Send multiple channel scraping tasks to the queue
         
         Args:
             channel_names: List of channel usernames (with or without @ prefix)
+            from_date: Date from which to scrape in format: 'DD-MM-YYYY'
         """
         async with await self.connect() as connection:
             channel = await connection.channel()
             await channel.declare_queue(self.queue_name, durable=True)
 
             for channel_name in channel_names:
-                await self.send_scrape_task(channel_name)
+                await self.send_scrape_task(channel_name, from_date)
 
 
 async def main():
     manager = TaskManager()
 
-    await manager.send_scrape_task("@example_channel")
+    await manager.send_scrape_task("@example_channel", "05-12-1994")
 
     channels = ["@channel1", "channel2", "@channel3"]
-    await manager.send_bulk_scrape_tasks(channels)
+    await manager.send_bulk_scrape_tasks(channels, "05-12-1994")
 
 if __name__ == "__main__":
     asyncio.run(main())
