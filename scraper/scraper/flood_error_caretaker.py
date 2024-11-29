@@ -7,9 +7,7 @@ from telethon.functions import channels
 
 class FloodCaretaker:
     """
-    This class introduced as an attempt to eliminate FloodWaitError on the ResolveUsername method,
-    which is called in ChannelScraper inside get_input_entity in the get_peer method.
-    The idea is as follows: we introduce a delay between any calls to get_input_entity.
+    This class introduced in order to not send ResolveUsername requests during FloodWaitError.
     If a FloodWaitError still occurs, we remember the time of the error and do not call the get_input_entity method.
 
     This way, scraper will still be able to perform other tasks, even during a ban,
@@ -17,9 +15,7 @@ class FloodCaretaker:
     (then there is no need to call get_input_entity)
     """
 
-    def __init__(self, get_inp_ent_delay) -> None:
-        self.get_inp_ent_delay = get_inp_ent_delay  # delay between get_input_entity calls, in seconds
-        self.last_get_inp_ent_call = None  # last time when get_input_entity called, in seconds
+    def __init__(self) -> None:
         self.fwe_delay = None  # delay on the ability to call get_input_entity was imposed by FloodWaitError, in seconds
         self.last_fwe = None  # last time when FloodWaitError occurred, in seconds
 
@@ -40,20 +36,6 @@ class FloodCaretaker:
                     request=channels.GetFullChannelRequest,
                     capture=int(remaining_wait_fwe),
                 )
-
-        # Enforce delay between successive get_input_entity calls
-        if self.last_get_inp_ent_call is not None:
-            time_since_last_call = time.time() - self.last_get_inp_ent_call
-            remaining_wait_call = self.get_inp_ent_delay - time_since_last_call
-
-            if time_since_last_call < self.get_inp_ent_delay:
-                logging.info(
-                    f"Waiting {remaining_wait_call:.2f} seconds before calling ResolveUsername..."
-                )
-                time.sleep(remaining_wait_call)
-
-        # Update the timestamp for the latest call
-        self.last_get_inp_ent_call = time.time()
 
     def add_fwe(self, fwe_delay: float) -> None:
         """

@@ -49,7 +49,7 @@ class ChannelScraper:
     def __init__(self, tg_client: TelegramClient, scraper_id: int):
         self.tg_client = tg_client
         self.scraper_id = scraper_id
-        self.flood_care = FloodCaretaker(100)
+        self.flood_care = FloodCaretaker()
 
     def check_channel_name(self, channel_name: str) -> bool:
         """
