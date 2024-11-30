@@ -15,14 +15,14 @@ engine = create_engine(
     connect_args={
         "options": f"-csearch_path={dbschema}"
         # The parameters below have been proposed to try to eliminate `dead` sessions for scrapers
-        + " -c statement_timeout=60s"
-        + " -c lock_timeout=60s"
-        + " -c idle_in_transaction_session_timeout=60s"
-        + " -c idle_session_timeout=60s"
+        + " -c statement_timeout=100s"
+        + " -c lock_timeout=100s"
+        + " -c idle_in_transaction_session_timeout=100s"
+        + " -c idle_session_timeout=100s"
     },
     json_serializer=lambda x: json.dumps(x, ensure_ascii=False),
     pool_pre_ping=True,
-    pool_recycle=60,  # prevent the pool from using a particular connection that has passed a certain age (in sec)
+    pool_recycle=100,  # prevent the pool from using a particular connection that has passed a certain age (in sec)
 )
 
 Session = sessionmaker(engine)

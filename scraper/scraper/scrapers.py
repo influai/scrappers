@@ -4,7 +4,17 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Union
 
-from database.database import Channels, Forwards, Peers, Posts, Runs, Similars
+from database.database import (
+    Channels,
+    Forwards,
+    Peers,
+    PostsContent,
+    PostsFlags,
+    PostsMetadata,
+    PostsMetrics,
+    Runs,
+    Similars,
+)
 from database.session import get_database_session
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -288,7 +298,7 @@ class PostScraper:
     Also manages the database transactions.
     """
 
-    def __init__(self, channel: InputPeerChannel, channel_name: str):
+    def __init__(self, channel: InputPeerChannel, channel_name: str) -> None:
         self.channel = channel
         self.channel_name = channel_name
 
@@ -320,20 +330,6 @@ class PostScraper:
         }
         return poll_info
 
-    def scrape_forward(self, post: Message) -> Dict | None:
-        """
-        Extracts information about the original channel a message was forwarded from, if it is.
-        """
-        try:
-            return {
-                "from_ch_id": post.fwd_from.from_id.channel_id,
-                "from_post_id": post.fwd_from.channel_post,
-                "to_ch_id": self.channel.channel_id,
-                "to_post_id": post.id,
-            }
-        except Exception:
-            return None
-
     def scrape_urls(self, post: Message) -> List[str]:
         """
         Extracts URLs from message entities. If post doesnt contain any URL return None.
@@ -347,14 +343,6 @@ class PostScraper:
                 elif isinstance(ent, MessageEntityUrl):
                     urls.append(post.raw_text[ent.offset : ent.offset + ent.length])
         return urls
-
-    def scrape_comments(self, post: Message) -> int | None:
-        """
-        Scrapes the number of comments on a post, if comments are allowed. None if not.
-        """
-        if post.replies:
-            return post.replies.replies
-        return None
 
     def scrape_reactions(self, post: Message) -> Tuple[int, dict, dict]:
         """
@@ -383,120 +371,171 @@ class PostScraper:
 
         return paid_reactions, stardard_reactions, custom_reactions
 
-    def scrape_post(self, post: Message) -> Tuple[Dict, Dict | None]:
+    def scrape_post(self, post: Message) -> Dict:
         """
-        Extracts needed data about post from Telethon Message object.
+        Extracts and organizes data about a post from the Telethon Message object.
 
-        Returns Posts and Forwards objects
+        Returns a dictionary representing the data for insertion into the database.
         """
         paid_reactions, standard_reactions, custom_reactions = self.scrape_reactions(post)
 
         post_data = {
-            "channel_id": self.channel.channel_id,
-            "post_id": post.id,
-            "post_date": post.date,
-            "scrape_date": datetime.now(tz=timezone.utc),
-            "views": post.views,
-            "paid_reactions": paid_reactions,
-            "forwards": post.forwards,
-            "comments": self.scrape_comments(post),
-            "silent": post.silent,
-            "is_post": post.post,
-            "noforwards": post.noforwards,
-            "pinned": post.pinned,
-            "via_bot_id": post.via_bot_id,
-            "via_business_bot_id": post.via_business_bot_id,
-            "fwd_from_flag": post.fwd_from is not None,
-            "photo": bool(post.photo),
-            "document": bool(post.document),
-            "web": bool(post.web_preview),
-            "audio": bool(post.audio),
-            "voice": bool(post.voice),
-            "video": bool(post.video),
-            "gif": bool(post.gif),
-            "geo": self.scrape_geo(post),
-            "poll": self.scrape_poll(post),
-            "standard_reactions": standard_reactions,
-            "custom_reactions": custom_reactions,
-            "raw_text": post.raw_text,
-            "urls": self.scrape_urls(post),
+            "posts_metadata": {
+                "channel_id": self.channel.channel_id,
+                "post_id": post.id,
+                "group_id": post.grouped_id,
+                "post_date": post.date,
+                "scrape_date": datetime.now(tz=timezone.utc),
+            },
+            "posts_flags": {
+                "is_post": post.post,
+                "silent": post.silent,
+                "noforwards": post.noforwards,
+                "pinned": post.pinned,
+                "fwd_from_flag": post.fwd_from is not None,
+                "photo": bool(post.photo),
+                "document": bool(post.document),
+                "web": bool(post.web_preview),
+                "audio": bool(post.audio),
+                "voice": bool(post.voice),
+                "video": bool(post.video),
+                "gif": bool(post.gif),
+            },
+            "posts_metrics": {
+                "views": post.views,
+                "forwards": post.forwards,
+                "comments": post.replies.replies if post.replies else None,
+                "paid_reactions": paid_reactions,
+                "standard_reactions": standard_reactions,
+                "custom_reactions": custom_reactions,
+            },
+            "posts_content": {
+                "raw_text": post.raw_text,
+                "urls": self.scrape_urls(post),
+                "geo": self.scrape_geo(post),
+                "poll": self.scrape_poll(post),
+                "via_bot_id": post.via_bot_id,
+                "via_business_bot_id": post.via_business_bot_id,
+            },
+            "forwards": {
+                "from_ch_id": post.fwd_from.from_id.channel_id if post.fwd_from else None,
+                "from_post_id": post.fwd_from.channel_post if post.fwd_from else None,
+            },
         }
 
-        forward_data = self.scrape_forward(post)
-
-        return post_data, forward_data
+        return post_data
 
     async def scrape_posts_batch(self, posts: List[Message]) -> None:
         """
         Iteratively process all posts, removing posts, which raises errors while trying to scrape.
-        All successfuly scraped posts then upserted into database tables Posts and Forwards in batch manner.
+        Successful posts are inserted into the database.
         """
-        # Lists for storing data for Posts and Forwards tables instances
-        db_posts = []
+        db_posts_metadata = []
+        db_posts_flags = []
+        db_posts_metrics = []
+        db_posts_content = []
         db_forwards = []
 
         for post in posts:
             # If any error encountered while processing a single post - skip that post
             try:
-                post_data, forward_data = self.scrape_post(post)
-                db_posts.append(post_data)
-                if forward_data:
-                    db_forwards.append(forward_data)
-            except Exception:
+                post_data = self.scrape_post(post)
+
+                db_posts_metadata.append(post_data["posts_metadata"])
+                db_posts_flags.append(post_data["posts_flags"])
+                db_posts_metrics.append(post_data["posts_metrics"])
+                db_posts_content.append(post_data["posts_content"])
+                db_forwards.append(post_data["forwards"])
+            except Exception as e:
+                logging.error(f"Error processing post {post.id}: {e}")
                 continue
 
-        # Bulk upserts data in Posts
+        # Bulk upsert data
         with get_database_session() as db_session:
-            if db_posts:
-                post_stmt = insert(Posts).values(db_posts)
-                post_stmt = post_stmt.on_conflict_do_update(
+            if db_posts_metadata:
+                metadata_stmt = insert(PostsMetadata).values(db_posts_metadata)
+                metadata_stmt = metadata_stmt.on_conflict_do_update(
                     constraint="uq_channel_post",
+                    set_={col: metadata_stmt.excluded[col] for col in ["group_id", "post_date", "scrape_date"]},
+                ).returning(PostsMetadata.id, PostsMetadata.channel_id, PostsMetadata.post_id)
+                result = db_session.execute(metadata_stmt)
+
+                # Map (channel_id, post_id) to the generated ID
+                id_map = {(row.channel_id, row.post_id): row.id for row in result.fetchall()}
+
+                # Update dependent data with correct IDs
+                for i in range(len(db_posts_metadata)):
+                    metadata = db_posts_metadata[i]
+                    id = id_map[(metadata["channel_id"], metadata["post_id"])]
+
+                    db_posts_flags[i]["id"] = id
+                    db_posts_metrics[i]["id"] = id
+                    db_posts_content[i]["id"] = id
+                    db_forwards[i]["id"] = id
+
+                # Now upsert these tables
+
+                # posts_flags
+                flags_stmt = insert(PostsFlags).values(db_posts_flags)
+                flags_stmt = flags_stmt.on_conflict_do_update(
+                    constraint="posts_flags_pkey",
                     set_={
-                        "post_date": post_stmt.excluded.post_date,
-                        "scrape_date": post_stmt.excluded.scrape_date,
-                        "views": post_stmt.excluded.views,
-                        "paid_reactions": post_stmt.excluded.paid_reactions,
-                        "forwards": post_stmt.excluded.forwards,
-                        "comments": post_stmt.excluded.comments,
-                        "silent": post_stmt.excluded.silent,
-                        "is_post": post_stmt.excluded.is_post,
-                        "noforwards": post_stmt.excluded.noforwards,
-                        "pinned": post_stmt.excluded.pinned,
-                        "via_bot_id": post_stmt.excluded.via_bot_id,
-                        "via_business_bot_id": post_stmt.excluded.via_business_bot_id,
-                        "fwd_from_flag": post_stmt.excluded.fwd_from_flag,
-                        "photo": post_stmt.excluded.photo,
-                        "document": post_stmt.excluded.document,
-                        "web": post_stmt.excluded.web,
-                        "audio": post_stmt.excluded.audio,
-                        "voice": post_stmt.excluded.voice,
-                        "video": post_stmt.excluded.video,
-                        "gif": post_stmt.excluded.gif,
-                        "geo": post_stmt.excluded.geo,
-                        "poll": post_stmt.excluded.poll,
-                        "standard_reactions": post_stmt.excluded.standard_reactions,
-                        "custom_reactions": post_stmt.excluded.custom_reactions,
-                        "raw_text": post_stmt.excluded.raw_text,
-                        "urls": post_stmt.excluded.urls,
+                        col: flags_stmt.excluded[col]
+                        for col in db_posts_flags[0].keys()
+                        if col != "id"
                     },
                 )
-                db_session.execute(post_stmt)
+                db_session.execute(flags_stmt)
 
-        # Bulk upserts data in Forwards
-        with get_database_session() as db_session:
-            if db_forwards:
-                forward_stmt = insert(Forwards).values(db_forwards)
-                forward_stmt = forward_stmt.on_conflict_do_nothing(
-                    index_elements=["from_ch_id", "from_post_id", "to_ch_id", "to_post_id"]
+                # posts_metrics
+                metrics_stmt = insert(PostsMetrics).values(db_posts_metrics)
+                metrics_stmt = metrics_stmt.on_conflict_do_update(
+                    constraint="posts_metrics_pkey",
+                    set_={
+                        col: metrics_stmt.excluded[col]
+                        for col in db_posts_metrics[0].keys()
+                        if col != "id"
+                    },
                 )
-                db_session.execute(forward_stmt)
+                db_session.execute(metrics_stmt)
 
-        logging.info(f"Successfully upserted {len(db_posts)} messages in database")
+                # posts_content
+                # before upsert, remove all empty records
+                db_posts_content = [
+                    content for content in db_posts_content if any(list(content.values())[:-1])
+                ]
+                if db_posts_content:
+                    content_stmt = insert(PostsContent).values(db_posts_content)
+                    content_stmt = content_stmt.on_conflict_do_update(
+                        constraint="posts_content_pkey",
+                        set_={
+                            col: content_stmt.excluded[col]
+                            for col in db_posts_content[0].keys()
+                            if col != "id"
+                        },
+                    )
+                    db_session.execute(content_stmt)
 
-    async def run(self, tg_client: TelegramClient, from_date: datetime, limit: int = 10000) -> int:
+                # forwards
+                # before upsert, remove all empty records
+                db_forwards = [
+                    fwd_rec for fwd_rec in db_forwards if any(list(fwd_rec.values())[:-1])
+                ]
+                if db_forwards:
+                    forward_stmt = insert(Forwards).values(db_forwards)
+                    forward_stmt = forward_stmt.on_conflict_do_nothing(constraint="forwards_pkey")
+                    db_session.execute(forward_stmt)
+
+        logging.info(f"Successfully upserted {len(db_posts_metadata)} posts into the database.")
+
+    async def run(self, tg_client: TelegramClient, from_date: datetime, limit: int = 20000) -> int:
         """
         Starts scraping process, iteratively process posts from channel from specified date to present time.
         Has limit for number of posts to scrape from date (scrapes only `limit` posts from current time).
+
+        Calc the default value for limit for 1 year time range in such way:
+        365 days * 7 TG posts per day * 7 avg # of media in TG post (it parsed separately with `group_id` tag) ~= 17.500
+        So i set 20.000 limit for posts.
 
         Returns number of posts scraped.
         """
@@ -507,11 +546,9 @@ class PostScraper:
 
         logging.info(f"Starting to process posts from {from_date}")
 
-        async for post in tg_client.iter_messages(
-            self.channel, limit=limit
-        ):
+        async for post in tg_client.iter_messages(self.channel, limit=limit):
             # Loop through posts from newest to `from_date` and stop when `limit` posts are scraped
-            
+
             if post.date < from_date:
                 break
 

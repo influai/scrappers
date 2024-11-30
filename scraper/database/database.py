@@ -1,9 +1,12 @@
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional
 
 from sqlalchemy import (
+    ARRAY,
+    JSON,
     BigInteger,
     Boolean,
+    Column,
     DateTime,
     Double,
     Float,
@@ -11,12 +14,9 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSON
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 
-
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
 
 class Channels(Base):
@@ -49,9 +49,6 @@ class Channels(Base):
     about: Mapped[Optional[str]] = mapped_column(
         String, nullable=True, comment="Description or 'about' section of the channel"
     )
-
-    def __repr__(self) -> str:
-        return f"Channels(id={self.id!r}, name={self.name!r}, participants={self.participants!r})"
 
 
 class Similars(Base):
@@ -86,126 +83,137 @@ class Similars(Base):
         String, nullable=True, comment="Title of the similar channel"
     )
 
-    def __repr__(self) -> str:
-        return f"Similars(base_channel={self.base_channel_id!r}, similar_channel={self.similar_channel_id!r})"
 
-
-class Posts(Base):
+class PostsMetadata(Base):
     """
-    Represents individual posts from Telegram channels.
+    Contains metadata for posts.
+    !!! Note that posts can be grouped together (e.g. a post with 2 photos = two objects with different id's that will have the same group_id).
+    Max number of posts in group = 10.
+    More info at `group_id` column comment.
     """
 
-    __tablename__ = "posts"
+    __tablename__ = "posts_metadata"
     __table_args__ = (
         UniqueConstraint("channel_id", "post_id", name="uq_channel_post"),
-        {"comment": "Contains data about posts published in Telegram channels"},
+        {
+            "comment": """
+    Contains metadata for posts.
+    !!! Note that posts can be grouped together (e.g. a post with 2 photos = two objects with different id's that will have the same group_id).
+    Max number of posts in group = 10.
+    More info at `group_id` column comment.
+    """
+        },
     )
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, comment="Unique record ID, automatically handled by DB not me"
+    id = Column(BigInteger, primary_key=True, comment="Unique record ID, auto handled by DB")
+    channel_id = Column(
+        BigInteger, nullable=False, comment="ID of the channel this post belongs to"
     )
-    channel_id: Mapped[int] = mapped_column(
-        ForeignKey("channels.id"), comment="ID of the channel this post belongs to"
-    )
-    post_id: Mapped[int] = mapped_column(
+    post_id = Column(
         BigInteger,
         nullable=False,
-        comment="ID of the post in channel, all posts have unique IDs inside one channel",
+        comment="ID of the post within the channel. All posts have unique IDs inside one channel",
     )
-
-    post_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, comment="Datetime when the post was published"
-    )
-    scrape_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, comment="Datetime when the post data was scraped"
-    )
-
-    views: Mapped[Optional[int]] = mapped_column(
+    group_id = Column(
         BigInteger,
         nullable=True,
-        comment="Number of views on the post. Null if the message is just notification (f.e. 'channel created', 'stream started')",
+        comment="Multiple posts with the same `group_id` indicate an album or media group. "
+        + "IMPORTANT: only 1 post in a group has reactions and comments, so we need somehow aggregate all posts within the same group. "
+        + "`group_id` is unique only within ONE channel. Max number of posts in group = 10. "
+        + "If this field = None, it means it is a single post that no longer includes any other information, so no need to worry about aggregation",
     )
-    paid_reactions: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=True, comment="Number of paid reactions, i.e. stars given to the post"
+    post_date = Column(
+        DateTime(timezone=True), nullable=False, comment="Datetime post was published"
     )
-    forwards: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=True, comment="Number of forwards of this post"
-    )
-    comments: Mapped[Optional[int]] = mapped_column(
-        BigInteger,
-        nullable=True,
-        comment="The number of comments on this post. Can be None if comments are not allowed.",
+    scrape_date = Column(
+        DateTime(timezone=True), nullable=False, comment="Datetime post data was scraped"
     )
 
-    silent: Mapped[Optional[bool]] = mapped_column(
-        Boolean, nullable=True, comment="Whether the post is silent (no notifications sent)"
+    # Relationships to other tables
+    posts_flags = relationship("PostsFlags", back_populates="posts_metadata", uselist=False)
+    posts_metrics = relationship("PostsMetrics", back_populates="posts_metadata", uselist=False)
+    posts_content = relationship("PostsContent", back_populates="posts_metadata", uselist=False)
+    forwards = relationship("Forwards", back_populates="posts_metadata", uselist=False)
+
+
+class PostsFlags(Base):
+    """
+    Contains flags for posts
+    """
+
+    __tablename__ = "posts_flags"
+    __table_args__ = ({"comment": "Contains flags for posts"},)
+
+    id = Column(
+        BigInteger,
+        ForeignKey("posts_metadata.id"),
+        primary_key=True,
+        comment="Post ID (FK to posts_metadata)",
     )
-    is_post: Mapped[Optional[bool]] = mapped_column(
+    is_post = Column(
         Boolean,
         nullable=True,
         comment="Whether the record is a post (True) or a notification (False)",
     )
-    noforwards: Mapped[Optional[bool]] = mapped_column(
+    silent = Column(
+        Boolean, nullable=True, comment="Whether the post is silent (no notifications sent)"
+    )
+    noforwards = Column(
         Boolean, nullable=True, comment="Whether forwarding of this post is disabled"
     )
-    pinned: Mapped[Optional[bool]] = mapped_column(
-        Boolean, nullable=True, comment="Whether the post is pinned in the channel"
-    )
-
-    via_bot_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=True, comment="ID of the bot that posted the message"
-    )
-    via_business_bot_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=True, comment="ID of the business bot associated with the post"
-    )
-
-    fwd_from_flag: Mapped[bool] = mapped_column(
+    pinned = Column(Boolean, nullable=True, comment="Whether the post is pinned")
+    fwd_from_flag = Column(
         Boolean, nullable=False, comment="Flag to indicate if the post is forwarded"
     )
 
-    photo: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains a photo"
-    )
-    document: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains a document"
-    )
-    web: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains a web preview"
-    )
-    audio: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains an audio file"
-    )
-    voice: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains a voice note"
-    )
-    video: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains a video"
-    )
-    gif: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Flag to indicate if the post contains a GIF"
-    )
+    photo = Column(Boolean, nullable=False, comment="Whether the post contains a photo")
+    document = Column(Boolean, nullable=False, comment="Whether the post contains a document")
+    web = Column(Boolean, nullable=False, comment="Whether the post contains a web preview")
+    audio = Column(Boolean, nullable=False, comment="Whether the post contains an audio file")
+    voice = Column(Boolean, nullable=False, comment="Whether the post contains a voice note")
+    video = Column(Boolean, nullable=False, comment="Whether the post contains a video")
+    gif = Column(Boolean, nullable=False, comment="Whether the post contains a GIF")
 
-    geo: Mapped[Optional[Tuple[float, float]]] = mapped_column(
-        ARRAY(Float, dimensions=1),
-        nullable=True,
-        comment="Geolocation data (longitude, latitude) if attached to the post, or None if no geo data is present.",
-    )
-    poll: Mapped[Optional[Dict[str, Union[str, List[str], int]]]] = mapped_column(
-        JSON,
-        nullable=True,
-        comment="Poll data from post, including the question, answers, and total voters."
-        + "Represents as dict with 3 keys: 'question': str, 'answers': list(str), 'total_voters': int. "
-        + "Note, that this entity is None if there is no poll in this post.",
-    )
+    # Relationship to posts_metadata
+    posts_metadata = relationship("PostsMetadata", back_populates="posts_flags")
 
-    standard_reactions: Mapped[Optional[Dict[str, int]]] = mapped_column(
+
+class PostsMetrics(Base):
+    """
+    Contains metrics for posts
+    """
+
+    __tablename__ = "posts_metrics"
+    __table_args__ = ({"comment": "Contains metrics for posts"},)
+
+    id = Column(
+        BigInteger,
+        ForeignKey("posts_metadata.id"),
+        primary_key=True,
+        comment="Post ID (FK to posts_metadata)",
+    )
+    views = Column(
+        BigInteger,
+        nullable=True,
+        comment="Number of views on the post. Null if the message is just notification (f.e. 'channel created', 'stream started')",
+    )
+    forwards = Column(BigInteger, nullable=True, comment="Number of forwards of the post")
+    comments = Column(
+        BigInteger,
+        nullable=True,
+        comment="The number of comments on this post. Can be None if comments are not allowed",
+    )
+    paid_reactions = Column(
+        BigInteger, nullable=True, comment="Number of paid reactions, i.e. stars given to the post"
+    )
+    standard_reactions = Column(
         JSON,
         nullable=True,
         comment="Data about reactions of post. Format: dict where keys are the Unicode characters"
         + " and values are number of this type of reactions on post."
         + "F.e.: {'😀': 10, '🫠': 52}",
     )
-    custom_reactions: Mapped[Optional[Dict[int, int]]] = mapped_column(
+    custom_reactions = Column(
         JSON,
         nullable=True,
         comment="This also data about reactions, but this contains the custom reactions,"
@@ -214,24 +222,63 @@ class Posts(Base):
         + " F.e.: {'345678': 10, '987654': 52}",
     )
 
-    raw_text: Mapped[Optional[str]] = mapped_column(
+    # Relationship to posts_metadata
+    posts_metadata = relationship("PostsMetadata", back_populates="posts_metrics")
+
+
+class PostsContent(Base):
+    """
+    Contains content details for posts.
+    Record is added only if at least one of the attributes has data (i.e. not None and not empty).
+    """
+
+    __tablename__ = "posts_content"
+    __table_args__ = (
+        {
+            "comment": """
+    Contains content details for posts.
+    Record is added only if at least one of the attributes has data (i.e. not None and not empty).
+    """
+        },
+    )
+
+    id = Column(
+        BigInteger,
+        ForeignKey("posts_metadata.id"),
+        primary_key=True,
+        comment="Post ID (FK to posts_metadata)",
+    )
+    raw_text = Column(
         String,
         nullable=True,
         comment="The raw post text, ignoring any formatting, i.e. without any entities in it."
         + " F.e. if original post text: 'hello, **world** **[гугл](https://google.com)', then the raw text will be: 'hello, world'"
         + " Can be None if it is ServiceMessage.",
     )
-    
-    urls: Mapped[Optional[List[str]]] = mapped_column(
-        ARRAY(String, dimensions=1),
+    urls = Column(
+        ARRAY(String),
         nullable=True,
         comment="List of URLs extracted from the post content. Can be None if post doesnt contains any URLs",
     )
+    geo = Column(
+        ARRAY(Float),
+        nullable=True,
+        comment="Geolocation data (longitude, latitude) if attached to the post, or None if no geo data is present",
+    )
+    poll = Column(
+        JSON,
+        nullable=True,
+        comment="Poll data from post, including the question, answers, and total voters."
+        + "Represents as dict with 3 keys: 'question': str, 'answers': list(str), 'total_voters': int. "
+        + "Note, that this entity is None if there is no poll in this post",
+    )
+    via_bot_id = Column(BigInteger, nullable=True, comment="ID of the bot that posted the message")
+    via_business_bot_id = Column(
+        BigInteger, nullable=True, comment="ID of the business bot associated with the post"
+    )
 
-    def __repr__(self) -> str:
-        return (
-            f"Posts(channel id={self.channel_id!r}, post id={self.post_id!r}, views={self.views!r})"
-        )
+    # Relationship to posts_metadata
+    posts_metadata = relationship("PostsMetadata", back_populates="posts_content")
 
 
 class Forwards(Base):
@@ -240,37 +287,29 @@ class Forwards(Base):
     """
 
     __tablename__ = "forwards"
-    __table_args__ = (
-        UniqueConstraint("from_ch_id", "from_post_id", "to_ch_id", "to_post_id", name="uq_forward"),
-        {"comment": "Tracks forwards of posts from one channel to another"},
+    __table_args__ = ({"comment": "Tracks forwards of posts from one channel to another"},)
+
+    id = Column(
+        BigInteger,
+        ForeignKey("posts_metadata.id"),
+        primary_key=True,
+        comment="Post ID (FK to posts_metadata)",
     )
 
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        comment="Unique forward record ID, automatically handled by DB not me",
-    )
-    from_ch_id: Mapped[int] = mapped_column(
+    from_ch_id = Column(
         BigInteger,
         nullable=False,
         comment="ID of the source channel (i.e. the channel wherein this post was 'originally' posted)",
     )
-    from_post_id: Mapped[Optional[int]] = mapped_column(
+
+    from_post_id = Column(
         BigInteger,
         nullable=True,
         comment="ID of the source post in source channel (if not available = None)",
     )
-    to_ch_id: Mapped[int] = mapped_column(
-        ForeignKey("channels.id"),
-        nullable=False,
-        comment="ID of the target channel (i.e. channel which make forward)",
-    )
-    to_post_id: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, comment="ID of the target post in target channel"
-    )
 
-    def __repr__(self) -> str:
-        return f"Forwards(id={self.id!r}, from_ch_id={self.from_ch_id!r}, from_post_id={self.from_post_id!r}, to_ch_id={self.to_ch_id!r}, to_post_id={self.to_post_id!r})"
+    # Relationship to posts_metadata
+    posts_metadata = relationship("PostsMetadata", back_populates="forwards")
 
 
 class Peers(Base):
@@ -297,11 +336,6 @@ class Peers(Base):
     access_hash: Mapped[int] = mapped_column(
         BigInteger, nullable=False, comment="Access hash for the channel"
     )
-
-    def __repr__(self) -> str:
-        return (
-            f"Peers(id={self.id!r}, scraper_id={self.scraper_id!r}), channel_id={self.channel_id!r}"
-        )
 
 
 class Runs(Base):
@@ -334,6 +368,3 @@ class Runs(Base):
     exec_time: Mapped[float] = mapped_column(
         Double, comment="Execution time of this process, in seconds"
     )
-
-    def __repr__(self) -> str:
-        return f"Runs(id={self.id!r}, channel_id={self.channel_id!r}, scrape_date={self.scrape_date!r})"

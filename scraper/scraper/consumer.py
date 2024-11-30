@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage, AbstractRobustConnection
@@ -72,7 +72,7 @@ class Consumer:
 
             if task.get("type") == "scrape":
                 ack_flag: bool = await self.scraper.scrape(
-                    task.get("channel_name"), datetime.strptime(task.get("from_date"), "%d-%m-%Y")
+                    task.get("channel_name"), datetime.strptime(task.get("from_date"), "%d-%m-%Y").astimezone(timezone.utc)
                 )
                 if ack_flag:
                     await msg.ack()
@@ -115,7 +115,7 @@ class Consumer:
         Launch the consuming action from the queue
         """
         self.scraper = await self.create_tg_scraper()
-
+        
         async with await self.rabbit_connect() as rabbit_conn:
             rabbit_channel = await rabbit_conn.channel()
             await rabbit_channel.set_qos(prefetch_count=1)
