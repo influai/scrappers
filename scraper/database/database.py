@@ -221,13 +221,7 @@ class Posts(Base):
         + " F.e. if original post text: 'hello, **world** **[гугл](https://google.com)', then the raw text will be: 'hello, world'"
         + " Can be None if it is ServiceMessage.",
     )
-    format_text: Mapped[Optional[str]] = mapped_column(
-        String,
-        nullable=True,
-        comment="The post text in markdown format (i.e. the 'original' text typed in the applications."
-        + " Can be None if it is ServiceMessage.",
-    )
-
+    
     urls: Mapped[Optional[List[str]]] = mapped_column(
         ARRAY(String, dimensions=1),
         nullable=True,

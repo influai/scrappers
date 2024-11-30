@@ -419,7 +419,6 @@ class PostScraper:
             "standard_reactions": standard_reactions,
             "custom_reactions": custom_reactions,
             "raw_text": post.raw_text,
-            "format_text": post.text,
             "urls": self.scrape_urls(post),
         }
 
@@ -478,7 +477,6 @@ class PostScraper:
                         "standard_reactions": post_stmt.excluded.standard_reactions,
                         "custom_reactions": post_stmt.excluded.custom_reactions,
                         "raw_text": post_stmt.excluded.raw_text,
-                        "format_text": post_stmt.excluded.format_text,
                         "urls": post_stmt.excluded.urls,
                     },
                 )
