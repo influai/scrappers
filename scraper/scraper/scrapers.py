@@ -493,9 +493,10 @@ class PostScraper:
 
         logging.info(f"Successfully upserted {len(db_posts)} messages in database")
 
-    async def run(self, tg_client: TelegramClient, from_date: datetime) -> int:
+    async def run(self, tg_client: TelegramClient, from_date: datetime, limit: int = 10000) -> int:
         """
         Starts scraping process, iteratively process posts from channel from specified date to present time.
+        Has limit for number of posts to scrape from date (scrapes only `limit` posts from current time).
 
         Returns number of posts scraped.
         """
@@ -507,8 +508,13 @@ class PostScraper:
         logging.info(f"Starting to process posts from {from_date}")
 
         async for post in tg_client.iter_messages(
-            self.channel, reverse=True, offset_date=from_date
+            self.channel, limit=limit
         ):
+            # Loop through posts from newest to `from_date` and stop when `limit` posts are scraped
+            
+            if post.date < from_date:
+                break
+
             posts_batch.append(post)
 
             if len(posts_batch) >= batch_size:
