@@ -1,0 +1,23 @@
+# ========== DB ==========
+DB_IP=1.1.1.1
+DB_PORT=1234
+DB_NAME=name
+DB_USER=user
+DB_PASSWORD=password
+
+# ========== RabbitMQ ==========
+RABBITMQ_HOST=1.1.1.1
+RABBITMQ_PORT=1234
+RABBITMQ_LOGIN=login
+RABBITMQ_PASSWORD=password
+
+# ========== TG ==========
+# Common, can leave it like this
+TG_DEVICE_MODEL=X540UAR
+TG_SYSTEM_VERSION=Linux ubuntu GNOME Wayland glibc 2.39
+TG_APP_VERSION=5.6.3 Snap
+
+# scraper
+TG_SESSION=1234qwer  # can be obtained from `scripts/init_script.py`
+TG_API_ID=1234567  # can be obtained from https://my.telegram.org/
+TG_API_HASH=12345678qwertyu  # can be obtained from https://my.telegram.org/
