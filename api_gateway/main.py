@@ -2,15 +2,12 @@ import json
 import os
 from datetime import datetime
 import pika
-from dotenv import load_dotenv
 from contracts import ScrapingTasksList
 from fastapi import FastAPI, HTTPException
 
 
 app = FastAPI()
 
-# Get the env vars
-load_dotenv()  # Load RabbitMQ creds (can load .env file via Docker Volume)
 parameters = pika.ConnectionParameters(
     host=os.getenv("RABBITMQ_HOST"),
     port=int(os.getenv("RABBITMQ_PORT")),

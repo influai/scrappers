@@ -3,11 +3,9 @@ import os
 from contextlib import contextmanager
 
 from database.database import Base
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-load_dotenv()  # Load creds (db) provided by --env-file in docker run
 
 dbschema='parse'
 engine = create_engine(

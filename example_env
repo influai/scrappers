@@ -18,6 +18,6 @@ TG_SYSTEM_VERSION=Linux ubuntu GNOME Wayland glibc 2.39
 TG_APP_VERSION=5.6.3 Snap
 
 # scraper
-TG_SESSION="1234qwer"  # can be obtained from `scripts/init_script.py`
+TG_SESSION=1234qwer  # can be obtained from `scripts/init_script.py`
 TG_API_ID=1234567  # can be obtained from https://my.telegram.org/
 TG_API_HASH=12345678qwertyu  # can be obtained from https://my.telegram.org/

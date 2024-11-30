@@ -6,14 +6,10 @@ from datetime import datetime, timezone
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage, AbstractRobustConnection
-from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 from scraper.scrapers import ChannelScraper
-
-# Load environment variables
-load_dotenv()  # load creds (TG, RabbitMQ) from .env frovided via --env-file in docker run
 
 # Configure logging
 logging.basicConfig(
@@ -72,7 +68,8 @@ class Consumer:
 
             if task.get("type") == "scrape":
                 ack_flag: bool = await self.scraper.scrape(
-                    task.get("channel_name"), datetime.strptime(task.get("from_date"), "%d-%m-%Y").astimezone(timezone.utc)
+                    task.get("channel_name"),
+                    datetime.strptime(task.get("from_date"), "%d-%m-%Y").astimezone(timezone.utc),
                 )
                 if ack_flag:
                     await msg.ack()
@@ -115,7 +112,7 @@ class Consumer:
         Launch the consuming action from the queue
         """
         self.scraper = await self.create_tg_scraper()
-        
+
         async with await self.rabbit_connect() as rabbit_conn:
             rabbit_channel = await rabbit_conn.channel()
             await rabbit_channel.set_qos(prefetch_count=1)

@@ -343,7 +343,22 @@ class PostScraper:
                 elif isinstance(ent, MessageEntityUrl):
                     urls.append(post.raw_text[ent.offset : ent.offset + ent.length])
         return urls
-
+    
+    def scrape_forward(self, post: Message) -> Dict:
+        """
+        Extracts information about the original channel a message was forwarded from, if it is.
+        """
+        try:
+            return {
+                "from_ch_id": post.fwd_from.from_id.channel_id,
+                "from_post_id": post.fwd_from.channel_post,
+            }
+        except Exception:
+            return {
+                "from_ch_id": None,
+                "from_post_id": None,
+            }
+        
     def scrape_reactions(self, post: Message) -> Tuple[int, dict, dict]:
         """
         Scrapes 3 types of reactions from post:
@@ -417,10 +432,7 @@ class PostScraper:
                 "via_bot_id": post.via_bot_id,
                 "via_business_bot_id": post.via_business_bot_id,
             },
-            "forwards": {
-                "from_ch_id": post.fwd_from.from_id.channel_id if post.fwd_from else None,
-                "from_post_id": post.fwd_from.channel_post if post.fwd_from else None,
-            },
+            "forwards": self.scrape_forward(post),
         }
 
         return post_data
