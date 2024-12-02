@@ -553,7 +553,7 @@ class PostScraper:
         """
 
         posts_scraped = 0
-        batch_size: int = 100
+        batch_size: int = 200
         posts_batch = []
 
         logging.info(f"Starting to process posts from {from_date}")
