@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 dbschema='parse'
 engine = create_engine(
+    # "postgresql://postgres:postgres@localhost:5432/postgres",
     f"postgresql://{os.getenv("DB_USER")}:{os.getenv("DB_PASSWORD")}@{os.getenv("DB_IP")}:{os.getenv("DB_PORT")}/{os.getenv("DB_NAME")}",
     connect_args={
         "options": f"-csearch_path={dbschema}"

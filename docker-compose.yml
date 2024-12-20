@@ -1,69 +1,112 @@
 services:
-  rabbitmq:
-    image: rabbitmq:management  
-    container_name: influai-scraper-rabbitmq
-    ports:
-      - "5677:5672"   
-      - "15677:15672" 
-    env_file:
-      - ./creds/rmq.env
+  # rabbitmq:
+  #   image: rabbitmq:management  
+  #   container_name: influai-scraper-rabbitmq
+  #   ports:
+  #     - "5677:5672"   
+  #     - "15677:15672" 
+  #   env_file:
+  #     - ./creds/rmq.env
 
-  api:
-    image: influai-scraper-api
-    build: ./api_gateway
-    container_name: influai-scraper-api
-    restart: always
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./creds/rmq.env
-    depends_on:
-      - rabbitmq
+  # api:
+  #   image: influai-scraper-api
+  #   build: ./api_gateway
+  #   container_name: influai-scraper-api
+  #   restart: always
+  #   ports:
+  #     - "8000:8000"
+  #   env_file:
+  #     - ./creds/rmq.env
+  #   depends_on:
+  #     - rabbitmq
 
   scraper1:
     image: influai-scraper-node
     build: ./scraper
     container_name: influai-scraper1
+    network_mode: "host"
     restart: always
     env_file:
       - ./creds/db.env
       - ./creds/rmq.env
       - ./creds/scraper1.env
-    depends_on:
-      - rabbitmq
+    # depends_on:
+    #   - rabbitmq
 
   scraper2:
-    image: influai-scraper
+    image: influai-scraper-node
     build: ./scraper
     container_name: influai-scraper2
+    network_mode: "host"
     restart: always
     env_file:
       - ./creds/db.env
       - ./creds/rmq.env
       - ./creds/scraper2.env
-    depends_on:
-      - rabbitmq
+    # depends_on:
+    #   - rabbitmq
 
   scraper3:
-    image: influai-scraper
+    image: influai-scraper-node
     build: ./scraper
     container_name: influai-scraper3
+    network_mode: "host"
     restart: always
     env_file:
       - ./creds/db.env
       - ./creds/rmq.env
       - ./creds/scraper3.env
-    depends_on:
-      - rabbitmq
+    # depends_on:
+    #   - rabbitmq
 
   scraper4:
-    image: influai-scraper
+    image: influai-scraper-node
     build: ./scraper
     container_name: influai-scraper4
+    network_mode: "host"
     restart: always
     env_file:
       - ./creds/db.env
       - ./creds/rmq.env
       - ./creds/scraper4.env
-    depends_on:
-      - rabbitmq
+    # depends_on:
+    #   - rabbitmq
+
+  scraper5:
+    image: influai-scraper-node
+    build: ./scraper
+    container_name: influai-scraper5
+    network_mode: "host"
+    restart: always
+    env_file:
+      - ./creds/db.env
+      - ./creds/rmq.env
+      - ./creds/scraper5.env
+    # depends_on:
+    #   - rabbitmq
+
+  scraper6:
+    image: influai-scraper-node
+    build: ./scraper
+    container_name: influai-scraper6
+    network_mode: "host"
+    restart: always
+    env_file:
+      - ./creds/db.env
+      - ./creds/rmq.env
+      - ./creds/scraper6.env
+    # depends_on:
+    #   - rabbitmq
+
+  scraper7:
+    image: influai-scraper-node
+    build: ./scraper
+    container_name: influai-scraper7
+    network_mode: "host"
+    restart: always
+    env_file:
+      - ./creds/db.env
+      - ./creds/rmq.env
+      - ./creds/scraper7.env
+    # depends_on:
+    #   - rabbitmq
